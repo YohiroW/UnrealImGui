@@ -110,6 +110,7 @@ void FImGuiModuleSettings::UpdateSettings()
 {
 	if (UImGuiSettings* SettingsObject = UImGuiSettings::Get())
 	{
+		SetExtraFont(SettingsObject->ExtraFont);
 		SetImGuiInputHandlerClass(SettingsObject->ImGuiInputHandlerClass);
 		SetShareKeyboardInput(SettingsObject->bShareKeyboardInput);
 		SetShareGamepadInput(SettingsObject->bShareGamepadInput);
@@ -125,6 +126,15 @@ void FImGuiModuleSettings::UpdateDPIScaleInfo()
 	if (UImGuiSettings* SettingsObject = UImGuiSettings::Get())
 	{
 		SetDPIScaleInfo(SettingsObject->DPIScale);
+	}
+}
+
+void FImGuiModuleSettings::SetExtraFont(const FSoftObjectPath& ExtraFontRef)
+{
+	if (ExtraFont != ExtraFontRef)
+	{
+		ExtraFont = ExtraFontRef;
+		OnExtraFontChanged.Broadcast(ExtraFontRef);
 	}
 }
 

@@ -155,7 +155,7 @@ private:
 };
 
 // UObject used for loading and saving ImGui settings. To access actual settings use FImGuiModuleSettings interface.
-UCLASS(config=ImGui, defaultconfig)
+UCLASS(config= Engine, defaultconfig, meta= (DisplayName= "ImGui"))
 class UImGuiSettings : public UObject
 {
 	GENERATED_BODY()
@@ -172,10 +172,14 @@ public:
 	virtual void BeginDestroy() override;
 
 protected:
+	// Path of custom font file (*.ttf), charset like Chinese is not fully supported by built-in font ProggyClean, 
+	// add your own font here to fix missing character issue. Need restart to take effect.
+	UPROPERTY(EditAnywhere, config, Category = "Extensions", meta = (AllowedClasses = "FontFace", ConfigRestartRequired = true))
+	FSoftObjectPath ExtraFont = FSoftObjectPath("/ImGui/Fonts/NotoSansSC-Regular.NotoSansSC-Regular");
 
 	// Path to own implementation of ImGui Input Handler allowing to customize handling of keyboard and gamepad input.
 	// If not set then default handler is used.
-	UPROPERTY(EditAnywhere, config, Category = "Extensions", meta = (MetaClass = "/Script/ImGui.ImGuiInputHandler"))
+	UPROPERTY(EditAnywhere, config, Category = "Extensions", meta = (MetaClass = "ImGuiInputHandler"))
 	FSoftClassPath ImGuiInputHandlerClass;
 
 	// Whether ImGui should share keyboard input with game.
@@ -236,6 +240,7 @@ public:
 
 	// Generic delegate used to notify changes of boolean properties.
 	DECLARE_MULTICAST_DELEGATE_OneParam(FBoolChangeDelegate, bool);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FSoftObjectPathChangeDelegate, const FSoftObjectPath&);
 	DECLARE_MULTICAST_DELEGATE_OneParam(FStringClassReferenceChangeDelegate, const FSoftClassPath&);
 	DECLARE_MULTICAST_DELEGATE_OneParam(FImGuiCanvasSizeInfoChangeDelegate, const FImGuiCanvasSizeInfo&);
 	DECLARE_MULTICAST_DELEGATE_OneParam(FImGuiDPIScaleInfoChangeDelegate, const FImGuiDPIScaleInfo&);
@@ -252,6 +257,8 @@ public:
 	// start-up and should be accessed trough properties interface. Remaining settings can have getter and/or change
 	// event that are defined depending on needs.
 
+	const FSoftObjectPath& GetExtraFont() const { return ExtraFont; }
+
 	// Get the path to custom implementation of ImGui Input Handler.
 	const FSoftClassPath& GetImGuiInputHandlerClass() const { return ImGuiInputHandlerClass; }
 
@@ -266,6 +273,9 @@ public:
 
 	// Get the DPI Scale information.
 	const FImGuiDPIScaleInfo& GetDPIScaleInfo() const { return DPIScale; }
+
+	// Delegate raised when ExtraFont is changed.
+	FSoftObjectPathChangeDelegate OnExtraFontChanged;
 
 	// Delegate raised when ImGui Input Handle is changed.
 	FStringClassReferenceChangeDelegate OnImGuiInputHandlerClassChanged;
@@ -285,6 +295,7 @@ private:
 	void UpdateSettings();
 	void UpdateDPIScaleInfo();
 
+	void SetExtraFont(const FSoftObjectPath& ExtraFontRef);
 	void SetImGuiInputHandlerClass(const FSoftClassPath& ClassReference);
 	void SetShareKeyboardInput(bool bShare);
 	void SetShareGamepadInput(bool bShare);
@@ -301,6 +312,7 @@ private:
 	FImGuiModuleProperties& Properties;
 	FImGuiModuleCommands& Commands;
 
+	FSoftObjectPath ExtraFont;
 	FSoftClassPath ImGuiInputHandlerClass;
 	FImGuiKeyInfo ToggleInputKey;
 	FImGuiCanvasSizeInfo CanvasSize;

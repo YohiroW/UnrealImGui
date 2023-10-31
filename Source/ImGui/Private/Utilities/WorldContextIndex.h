@@ -15,6 +15,9 @@ namespace Utilities
 	// Standalone context index.
 	static constexpr int32 STANDALONE_GAME_CONTEXT_INDEX = -2;
 
+	// Editor window context index offset
+	static constexpr int32 EDITOR_WINDOW_CONTEXT_INDEX_OFFSET = 100;
+
 #if WITH_EDITOR
 
 	// Editor context index. We are lacking flexibility here, so we might need to change it somehow.

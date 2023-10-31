@@ -14,6 +14,7 @@ class FImGuiInputHandlerFactory
 public:
 
 	static UImGuiInputHandler* NewHandler(const FSoftClassPath& HandlerClassReference, FImGuiModuleManager* ModuleManager, UGameViewportClient* GameViewport, int32 ContextIndex);
+	static UImGuiInputHandler* NewEditorWindowHandler(UPackage* OuterPkg, const FSoftClassPath& HandlerClassReference, FImGuiModuleManager* ModuleManager, int32 ContextIndex);
 
 	static void ReleaseHandler(UImGuiInputHandler* Handler);
 };

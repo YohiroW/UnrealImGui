@@ -27,11 +27,26 @@ struct EDelegateCategory
 		Default,
 
 		// Multi-context draw event defined in context manager.
-		MultiContext
+		MultiContext,
+
+		// For editor window draw events.
+		EditorWindow
 	};
 };
 
 FImGuiModuleManager* ImGuiModuleManager = nullptr;
+FImGuiModuleManager* GetImGuiModuleManager()
+{
+	if (ImGuiModuleManager)
+	{
+		return ImGuiModuleManager;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ImGuiModuleManager is null!"));
+		return nullptr;
+	}
+}
 
 #if WITH_EDITOR
 static FImGuiEditor* ImGuiEditor = nullptr;
@@ -45,6 +60,15 @@ FImGuiDelegateHandle FImGuiModule::AddEditorImGuiDelegate(const FImGuiDelegate& 
 	return { FImGuiDelegatesContainer::Get().OnWorldDebug(Utilities::EDITOR_CONTEXT_INDEX).Add(Delegate),
 		EDelegateCategory::Default, Utilities::EDITOR_CONTEXT_INDEX };
 }
+
+FImGuiDelegateHandle FImGuiModule::AddEditorWindowImGuiDelegate(const FImGuiDelegate& Delegate, int32 Index)
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Debug] Create editor window context with unoffset_Index %d, final offset %d"), Index, Utilities::EDITOR_WINDOW_CONTEXT_INDEX_OFFSET + Index);
+
+	return { ImGuiModuleManager->GetContextManager().GetEditorWindowContextProxy(Index).OnDraw().Add(Delegate),
+		EDelegateCategory::EditorWindow, Utilities::EDITOR_WINDOW_CONTEXT_INDEX_OFFSET + Index };
+}
+
 #endif
 
 FImGuiDelegateHandle FImGuiModule::AddWorldImGuiDelegate(const FImGuiDelegate& Delegate)
@@ -66,13 +90,32 @@ FImGuiDelegateHandle FImGuiModule::AddMultiContextImGuiDelegate(const FImGuiDele
 
 void FImGuiModule::RemoveImGuiDelegate(const FImGuiDelegateHandle& Handle)
 {
-	if (Handle.Category == EDelegateCategory::MultiContext)
+	switch (Handle.Category)
 	{
-		FImGuiDelegatesContainer::Get().OnMultiContextDebug().Remove(Handle.Handle);
-	}
-	else
-	{
-		FImGuiDelegatesContainer::Get().OnWorldDebug(Handle.Index).Remove(Handle.Handle);
+		case EDelegateCategory::Default:
+		{
+			FImGuiDelegatesContainer::Get().OnWorldDebug(Handle.Index).Remove(Handle.Handle);
+			break;
+		}
+		case EDelegateCategory::MultiContext:
+		{
+			FImGuiDelegatesContainer::Get().OnMultiContextDebug().Remove(Handle.Handle);
+			break;
+		}
+		case EDelegateCategory::EditorWindow:
+		{	
+			// Should convert to unoffset index, because in code path
+			// GetEditorWindowContextProxy -> GetEditorWindowContextData, it will plus with offset
+			//const int32& UnOffsetIndex = Handle.Index - Utilities::EDITOR_WINDOW_CONTEXT_INDEX_OFFSET;
+
+			// Dont remove context index when editor window is closed, because it will be reused
+			// Force remove context index might lead to random crash for time sequence issue.  
+			//ImGuiModuleManager->GetContextManager().GetEditorWindowContextProxy(UnOffsetIndex).OnDraw().Remove(Handle.Handle);		
+			//ImGuiModuleManager->GetContextManager().RemoveContext(Handle.Index);
+			break;
+		}
+		default:
+			break;
 	}
 }
 

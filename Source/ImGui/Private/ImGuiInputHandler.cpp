@@ -130,15 +130,20 @@ FReply UImGuiInputHandler::OnMouseButtonDown(const FPointerEvent& MouseEvent)
 	}
 
 	InputState->SetMouseDown(MouseEvent, true);
-	if (ModuleManager)
-	{
-		FImGuiContextProxy* Proxy = ModuleManager->GetContextManager().GetContextProxy(0);
-		if (Proxy)
-		{
-			GEngine->AddOnScreenDebugMessage(15, 10, Proxy->WantsMouseCapture() ? FColor::Green : FColor::Red, TEXT("Handler Down"));
-			return ToReply(Proxy->WantsMouseCapture());
-		}
-	}
+
+	// @WangYuhao: Comment out for we dont use mouse input sharing at the moment.
+	//             Code below will block docked tab from being scratched in editor window.
+	//if (ModuleManager)
+	//{
+	//	FImGuiContextProxy* Proxy = ModuleManager->GetContextManager().GetContextProxy(0);
+	//	if (Proxy)
+	//	{
+	//		UE_LOG(LogTemp, Warning, TEXT("OnMouseButtonDown::WantsMouseCapture %s."), Proxy->WantsMouseCapture() ? "True": "False");
+	//		GEngine->AddOnScreenDebugMessage(15, 10, Proxy->WantsMouseCapture() ? FColor::Green : FColor::Red, TEXT("Handler Down"));
+	//		return ToReply(Proxy->WantsMouseCapture());
+	//	}
+	//}
+
 	return ToReply(true);
 }
 

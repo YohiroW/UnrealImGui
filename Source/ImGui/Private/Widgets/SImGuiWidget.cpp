@@ -1,15 +1,13 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "SImGuiWidget.h"
-#include "SImGuiCanvasControl.h"
-
+#include "Widgets/SImGuiWidget.h"
+#include "Widgets/SImGuiCanvasControl.h"
 #include "ImGuiContextManager.h"
 #include "ImGuiContextProxy.h"
 #include "ImGuiInputHandler.h"
 #include "ImGuiInputHandlerFactory.h"
 #include "ImGuiInteroperability.h"
 #include "ImGuiModuleManager.h"
-#include "ImGuiModuleSettings.h"
 #include "TextureManager.h"
 #include "Utilities/Arrays.h"
 #include "VersionCompatibility.h"
@@ -24,23 +22,19 @@
 
 #include <utility>
 
-
 #if IMGUI_WIDGET_DEBUG
+	DEFINE_LOG_CATEGORY_STATIC(LogImGuiWidget, Warning, All);
+	#define IMGUI_WIDGET_LOG(Verbosity, Format, ...) UE_LOG(LogImGuiWidget, Verbosity, Format, __VA_ARGS__)
 
-DEFINE_LOG_CATEGORY_STATIC(LogImGuiWidget, Warning, All);
+	#define TEXT_INPUT_MODE(Val) (\
+			(Val) == EInputMode::Full ? TEXT("Full") :\
+			(Val) == EInputMode::MousePointerOnly ? TEXT("MousePointerOnly") :\
+			TEXT("None"))
 
-#define IMGUI_WIDGET_LOG(Verbosity, Format, ...) UE_LOG(LogImGuiWidget, Verbosity, Format, __VA_ARGS__)
-
-#define TEXT_INPUT_MODE(Val) (\
-	(Val) == EInputMode::Full ? TEXT("Full") :\
-	(Val) == EInputMode::MousePointerOnly ? TEXT("MousePointerOnly") :\
-	TEXT("None"))
-
-#define TEXT_BOOL(Val) ((Val) ? TEXT("true") : TEXT("false"))
+	#define TEXT_BOOL(Val) ((Val) ? TEXT("true") : TEXT("false"))
 
 #else
-
-#define IMGUI_WIDGET_LOG(...)
+	#define IMGUI_WIDGET_LOG(...)
 
 #endif // IMGUI_WIDGET_DEBUG
 
@@ -61,29 +55,13 @@ namespace CVars
 }
 #endif // IMGUI_WIDGET_DEBUG
 
-namespace
-{
-	FORCEINLINE FVector2D MaxVector(const FVector2D& A, const FVector2D& B)
-	{
-		return FVector2D(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y));
-	}
-
-	FORCEINLINE FVector2D RoundVector(const FVector2D& Vector)
-	{
-		return FVector2D(FMath::RoundToFloat(Vector.X), FMath::RoundToFloat(Vector.Y));
-	}
-
-	FORCEINLINE FSlateRenderTransform RoundTranslation(const FSlateRenderTransform& Transform)
-	{
-		return FSlateRenderTransform(Transform.GetMatrix(), RoundVector(Transform.GetTranslation()));
-	}
-}
-
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SImGuiWidget::Construct(const FArguments& InArgs)
 {
 	checkf(InArgs._ModuleManager, TEXT("Null Module Manager argument"));
 	checkf(InArgs._GameViewport, TEXT("Null Game Viewport argument"));
+
+	ImGuiWidgetType = EImGuiWidgetType::Runtime;
 
 	ModuleManager = InArgs._ModuleManager;
 	GameViewport = InArgs._GameViewport;
@@ -155,11 +133,6 @@ void SImGuiWidget::Tick(const FGeometry& AllottedGeometry, const double InCurren
 	UpdateCanvasSize();
 }
 
-FReply SImGuiWidget::OnKeyChar(const FGeometry& MyGeometry, const FCharacterEvent& CharacterEvent)
-{
-	return InputHandler->OnKeyChar(CharacterEvent);
-}
-
 FReply SImGuiWidget::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& KeyEvent)
 {
 	UpdateCanvasControlMode(KeyEvent);
@@ -172,11 +145,6 @@ FReply SImGuiWidget::OnKeyUp(const FGeometry& MyGeometry, const FKeyEvent& KeyEv
 	return InputHandler->OnKeyUp(KeyEvent);
 }
 
-FReply SImGuiWidget::OnAnalogValueChanged(const FGeometry& MyGeometry, const FAnalogInputEvent& AnalogInputEvent)
-{
-	return InputHandler->OnAnalogValueChanged(AnalogInputEvent);
-}
-
 FReply SImGuiWidget::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
 {
 	return InputHandler->OnMouseButtonDown(MouseEvent).LockMouseToWidget(SharedThis(this));
@@ -187,7 +155,7 @@ FReply SImGuiWidget::OnMouseButtonDoubleClick(const FGeometry& MyGeometry, const
 	return InputHandler->OnMouseButtonDoubleClick(MouseEvent).LockMouseToWidget(SharedThis(this));
 }
 
-namespace
+namespace ImGuiWidget
 {
 	bool NeedMouseLock(const FPointerEvent& MouseEvent)
 	{
@@ -203,21 +171,11 @@ namespace
 FReply SImGuiWidget::OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
 {
 	FReply Reply = InputHandler->OnMouseButtonUp(MouseEvent);
-	if (!NeedMouseLock(MouseEvent))
+	if (!ImGuiWidget::NeedMouseLock(MouseEvent))
 	{
 		Reply.ReleaseMouseLock();
 	}
 	return Reply;
-}
-
-FReply SImGuiWidget::OnMouseWheel(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
-{
-	return InputHandler->OnMouseWheel(MouseEvent);
-}
-
-FReply SImGuiWidget::OnMouseMove(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
-{
-	return InputHandler->OnMouseMove(TransformScreenPointToImGui(MyGeometry, MouseEvent.GetScreenSpacePosition()), MouseEvent);
 }
 
 FReply SImGuiWidget::OnFocusReceived(const FGeometry& MyGeometry, const FFocusEvent& FocusEvent)
@@ -234,50 +192,6 @@ FReply SImGuiWidget::OnFocusReceived(const FGeometry& MyGeometry, const FFocusEv
 	return FReply::Handled();
 }
 
-void SImGuiWidget::OnFocusLost(const FFocusEvent& FocusEvent)
-{
-	Super::OnFocusLost(FocusEvent);
-
-	IMGUI_WIDGET_LOG(VeryVerbose, TEXT("ImGui Widget %d - Focus Lost."), ContextIndex);
-
-	InputHandler->OnKeyboardInputDisabled();
-	InputHandler->OnGamepadInputDisabled();
-}
-
-void SImGuiWidget::OnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
-{
-	Super::OnMouseEnter(MyGeometry, MouseEvent);
-
-	IMGUI_WIDGET_LOG(VeryVerbose, TEXT("ImGui Widget %d - Mouse Enter."), ContextIndex);
-
-	InputHandler->OnMouseInputEnabled();
-}
-
-void SImGuiWidget::OnMouseLeave(const FPointerEvent& MouseEvent)
-{
-	Super::OnMouseLeave(MouseEvent);
-
-	IMGUI_WIDGET_LOG(VeryVerbose, TEXT("ImGui Widget %d - Mouse Leave."), ContextIndex);
-
-	InputHandler->OnMouseInputDisabled();
-}
-
-FReply SImGuiWidget::OnTouchStarted(const FGeometry& MyGeometry, const FPointerEvent& TouchEvent)
-{
-	return InputHandler->OnTouchStarted(TransformScreenPointToImGui(MyGeometry, TouchEvent.GetScreenSpacePosition()), TouchEvent);
-}
-
-FReply SImGuiWidget::OnTouchMoved(const FGeometry& MyGeometry, const FPointerEvent& TouchEvent)
-{
-	return InputHandler->OnTouchMoved(TransformScreenPointToImGui(MyGeometry, TouchEvent.GetScreenSpacePosition()), TouchEvent);
-}
-
-FReply SImGuiWidget::OnTouchEnded(const FGeometry& MyGeometry, const FPointerEvent& TouchEvent)
-{
-	UpdateVisibility();
-	return InputHandler->OnTouchEnded(TransformScreenPointToImGui(MyGeometry, TouchEvent.GetScreenSpacePosition()), TouchEvent);
-}
-
 void SImGuiWidget::CreateInputHandler(const FSoftClassPath& HandlerClassReference)
 {
 	ReleaseInputHandler();
@@ -285,15 +199,6 @@ void SImGuiWidget::CreateInputHandler(const FSoftClassPath& HandlerClassReferenc
 	if (!InputHandler.IsValid())
 	{
 		InputHandler = FImGuiInputHandlerFactory::NewHandler(HandlerClassReference, ModuleManager, GameViewport.Get(), ContextIndex);
-	}
-}
-
-void SImGuiWidget::ReleaseInputHandler()
-{
-	if (InputHandler.IsValid())
-	{
-		FImGuiInputHandlerFactory::ReleaseHandler(InputHandler.Get());
-		InputHandler.Reset();
 	}
 }
 
@@ -329,41 +234,9 @@ void SImGuiWidget::UnregisterImGuiSettingsDelegates()
 	Settings.OnCanvasSizeChangedDelegate.RemoveAll(this);
 }
 
-void SImGuiWidget::SetHideMouseCursor(bool bHide)
-{
-	if (bHideMouseCursor != bHide)
-	{
-		bHideMouseCursor = bHide;
-		UpdateMouseCursor();
-	}
-}
-
 bool SImGuiWidget::IsConsoleOpened() const
 {
 	return GameViewport->ViewportConsole && GameViewport->ViewportConsole->ConsoleState != NAME_None;
-}
-
-void SImGuiWidget::UpdateVisibility()
-{
-	// Make sure that we do not occlude other widgets, if input is disabled or if mouse is set to work in a transparent
-	// mode (hit-test invisible).
-	SetVisibility(bInputEnabled && !bTransparentMouseInput ? EVisibility::Visible : EVisibility::HitTestInvisible);
-
-	IMGUI_WIDGET_LOG(VeryVerbose, TEXT("ImGui Widget %d - Visibility updated to '%s'."),
-		ContextIndex, *GetVisibility().ToString());
-}
-
-void SImGuiWidget::UpdateMouseCursor()
-{
-	if (!bHideMouseCursor)
-	{
-		const FImGuiContextProxy* ContextProxy = ModuleManager->GetContextManager().GetContextProxy(ContextIndex);
-		SetCursor(ContextProxy ? ContextProxy->GetMouseCursor() : EMouseCursor::Default);
-	}
-	else
-	{
-		SetCursor(EMouseCursor::None);
-	}
 }
 
 ULocalPlayer* SImGuiWidget::GetLocalPlayer() const
@@ -590,7 +463,7 @@ void SImGuiWidget::UpdateCanvasSize()
 			{
 				FVector2D ViewportSize;
 				GameViewport->GetViewportSize(ViewportSize);
-				CanvasSize = MaxVector(CanvasSize, ViewportSize);
+				CanvasSize = ImGuiWidget::MaxVector(CanvasSize, ViewportSize);
 			}
 			else
 			{
@@ -600,7 +473,7 @@ void SImGuiWidget::UpdateCanvasSize()
 
 			// Clamping DPI Scale to keep the canvas size from getting too big.
 			CanvasSize /= FMath::Max(DPIScale, 0.01f);
-			CanvasSize = RoundVector(CanvasSize);
+			CanvasSize = ImGuiWidget::RoundVector(CanvasSize);
 
 			ContextProxy->SetDisplaySize(CanvasSize);
 		}
@@ -621,12 +494,6 @@ void SImGuiWidget::OnPostImGuiUpdate()
 	UpdateMouseCursor();
 }
 
-FVector2D SImGuiWidget::TransformScreenPointToImGui(const FGeometry& MyGeometry, const FVector2D& Point) const
-{
-	const FSlateRenderTransform ImGuiToScreen = ImGuiTransform.Concatenate(MyGeometry.GetAccumulatedRenderTransform());
-	return ImGuiToScreen.Inverse().TransformPoint(Point);
-}
-
 int32 SImGuiWidget::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyClippingRect,
 	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& WidgetStyle, bool bParentEnabled) const
 {
@@ -639,7 +506,7 @@ int32 SImGuiWidget::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeo
 		// Calculate transform from ImGui to screen space. Rounding translation is necessary to keep it pixel-perfect
 		// in older engine versions.
 		const FSlateRenderTransform& WidgetToScreen = AllottedGeometry.GetAccumulatedRenderTransform();
-		const FSlateRenderTransform ImGuiToScreen = RoundTranslation(ImGuiRenderTransform.Concatenate(WidgetToScreen));
+		const FSlateRenderTransform ImGuiToScreen = ImGuiWidget::RoundTranslation(ImGuiRenderTransform.Concatenate(WidgetToScreen));
 
 #if ENGINE_COMPATIBILITY_LEGACY_CLIPPING_API
 		// Convert clipping rectangle to format required by Slate vertex.
@@ -990,8 +857,8 @@ void SImGuiWidget::OnDebugDraw()
 
 			Columns::CollapsingGroup("Mouse Axes", 4, [&]()
 			{
-				TwoColumns::Value("Position X", InputState.GetMousePosition().X);
-				TwoColumns::Value("Position Y", InputState.GetMousePosition().Y);
+				TwoColumns::Value("Position X", (float)(InputState.GetMousePosition().X));
+				TwoColumns::Value("Position Y", (float)(InputState.GetMousePosition().Y));
 				TwoColumns::Value("Wheel Delta", InputState.GetMouseWheelDelta());
 				ImGui::NextColumn(); ImGui::NextColumn();
 			});

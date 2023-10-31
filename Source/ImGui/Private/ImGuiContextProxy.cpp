@@ -14,10 +14,8 @@
 #include <GenericPlatform/GenericPlatformFile.h>
 #include <Misc/Paths.h>
 
-
 static constexpr float DEFAULT_CANVAS_WIDTH = 3840.f;
 static constexpr float DEFAULT_CANVAS_HEIGHT = 2160.f;
-
 
 namespace
 {
@@ -124,6 +122,15 @@ FImGuiContextProxy::~FImGuiContextProxy()
 
 		// Destroy ImPlot context
 		ImPlot::DestroyContext();
+	}
+}
+
+void FImGuiContextProxy::SetNextWindowSize(const FVector2D& WindowSize)
+{
+	if (Context)
+	{
+		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+		ImGui::SetNextWindowSize(ImVec2(WindowSize.X, WindowSize.Y));
 	}
 }
 

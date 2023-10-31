@@ -6,8 +6,10 @@
 #include "ImGuiModuleProperties.h"
 #include "ImGuiTextureHandle.h"
 
+#include "Interfaces/IPluginManager.h"
 #include <Modules/ModuleManager.h>
 
+class FImGuiModuleManager* GetImGuiModuleManager();
 
 class FImGuiModule : public IModuleInterface
 {
@@ -45,6 +47,8 @@ public:
 	 * @returns Returns handle that can be used to remove delegate (@see RemoveImGuiDelegate)
 	 */
 	virtual FImGuiDelegateHandle AddEditorImGuiDelegate(const FImGuiDelegate& Delegate);
+
+	virtual FImGuiDelegateHandle AddEditorWindowImGuiDelegate(const FImGuiDelegate& Delegate, int32 Index);
 #endif
 
 	/**

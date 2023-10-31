@@ -1,6 +1,7 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
 #include "ImGuiModuleManager.h"
+#include "ImGuiModule.h"
 
 #include "ImGuiInteroperability.h"
 #include "Utilities/WorldContextIndex.h"
@@ -9,7 +10,6 @@
 #include <Modules/ModuleManager.h>
 
 #include <imgui.h>
-
 
 // High enough z-order guarantees that ImGui output is rendered on top of the game UI.
 constexpr int32 IMGUI_WIDGET_Z_ORDER = 10000;

@@ -50,6 +50,8 @@ public:
 	// Set the desired context display size.
 	void SetDisplaySize(const FVector2D& Size) { DisplaySize = Size; }
 
+	void SetNextWindowSize(const FVector2D& WindowSize);
+
 	// Reset the desired context display size to default size.
 	void ResetDisplaySize();
 

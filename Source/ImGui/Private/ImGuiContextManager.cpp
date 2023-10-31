@@ -9,7 +9,11 @@
 #include "Utilities/WorldContext.h"
 #include "Utilities/WorldContextIndex.h"
 
+#include "Engine/FontFace.h"
+
 #include <imgui.h>
+
+#define EXTRA_FONT_PATH    TEXT("/Content/Fonts/NotoSansSC-Regular.ttf")
 
 // MSVC warnings
 #ifdef _MSC_VER
@@ -26,6 +30,12 @@ namespace
 	FORCEINLINE FString GetEditorContextName()
 	{
 		return TEXT("Editor");
+	}
+
+	// Name for editor window ImGui context.
+	FORCEINLINE FString GetEditorWindowContextName()
+	{
+		return TEXT("EditorWindow");
 	}
 
 	// Name for world ImGui context.
@@ -162,6 +172,20 @@ FImGuiContextManager::FContextData& FImGuiContextManager::GetEditorContextData()
 
 	return *Data;
 }
+
+FImGuiContextManager::FContextData& FImGuiContextManager::GetEditorWindowContextData(int32 Index)
+{
+	int32 ContextIndex = Utilities::EDITOR_WINDOW_CONTEXT_INDEX_OFFSET + Index;
+	FContextData* Data = Contexts.Find(ContextIndex);
+
+	if (UNLIKELY(!Data))
+	{
+		Data = &Contexts.Emplace(ContextIndex, FContextData{ GetEditorWindowContextName(), ContextIndex, FontAtlas, DPIScale });
+		OnContextProxyCreated.Broadcast(ContextIndex, *Data->ContextProxy);
+	}
+
+	return *Data;
+}
 #endif // WITH_EDITOR
 
 #if !WITH_EDITOR
@@ -267,6 +291,8 @@ void FImGuiContextManager::BuildFontAtlas(const TMap<FName, TSharedPtr<ImFontCon
 		FontConfig.SizePixels = FMath::RoundFromZero(13.f * DPIScale);
 		FontAtlas.AddFontDefault(&FontConfig);
 
+		AddExtraFontAtlas();
+
 		// Build custom fonts
 		for (const TPair<FName, TSharedPtr<ImFontConfig>>& CustomFontPair : CustomFontConfigs)
 		{
@@ -287,6 +313,33 @@ void FImGuiContextManager::BuildFontAtlas(const TMap<FName, TSharedPtr<ImFontCon
 		FontAtlas.GetTexDataAsRGBA32(&Pixels, &Width, &Height, &Bpp);
 
 		OnFontAtlasBuilt.Broadcast();
+	}
+}
+
+void FImGuiContextManager::AddExtraFontAtlas()
+{
+	FSoftObjectPath ExtraFontPath = Settings.GetExtraFont();
+	
+	if (UFontFace* FontFace = Cast<UFontFace>(ExtraFontPath.TryLoad()))
+	{ 
+		FFontFaceDataConstRef FontData = FontFace->GetFontFaceData();
+		if (FontData->HasData())
+		{
+			//const TArray<uint8>& FontRawData = FontData->GetData();
+			//int DataSize = FontRawData.GetAllocatedSize();
+
+			ImFontConfig NewFontConfig;
+			NewFontConfig.MergeMode = true;
+
+			// We can also load a new font though AddFontFromMemoryTTF()
+			// But the font data here is allocated from unreal engine, while when shutdown this module (like quit engine) ImGui will try to free the data.
+			// Which caused ImGui freed a pointer already freed.
+			//FontAtlas.AddFontFromMemoryTTF((void*)ExtraFontData.GetData(), DataSize, 16.f * DPIScale, &NewFontConfig, FontAtlas.GetGlyphRangesChineseFull());
+
+			FString PluginDir = IPluginManager::Get().FindPlugin(TEXT("ImGui"))->GetBaseDir();
+			FString FontTTF = PluginDir + EXTRA_FONT_PATH;
+			FontAtlas.AddFontFromFileTTF(TCHAR_TO_UTF8(*FontTTF), 16.f * DPIScale, &NewFontConfig, FontAtlas.GetGlyphRangesChineseFull());
+		}
 	}
 }
 
